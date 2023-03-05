@@ -1,0 +1,180 @@
+//Solution goes in Sources
+enum Poker {
+    static func bestHand(_ hands: [String]) -> String {
+        let pokerHands = hands.compactMap { PokerHand($0) }
+        let bestHand = pokerHands.sorted().last!
+        return bestHand.description
+    }
+}
+struct PokerHand {
+    enum Rank: Int {
+        case highCard = 1, onePair, twoPairs, threeOfAKind, straight, flush, fullHouse, fourOfAKind, straightFlush
+    }
+    private let cards: [PlayingCard]
+    private let rank: Rank
+    var sortedCards: [PlayingCard] {
+        return cards.sorted()
+    }
+    var highCard: PlayingCard.Rank {
+        switch rank {
+        case .straightFlush, .straight, .flush, .highCard:
+            return cards.sorted().max()!.rank
+        default:
+            let cardsByRank = Dictionary(grouping: cards) { $0.rank }
+            return cardsByRank.max { $0.value.count < $1.value.count }!.value.first!.rank
+        }
+    }
+    var lowCard: PlayingCard.Rank {
+        switch rank {
+        case .straightFlush, .straight, .flush, .highCard:
+            return cards.sorted().max()!.rank
+        default:
+            let cardsByRank = Dictionary(grouping: cards) { $0.rank }
+            return cardsByRank.min { $0.value.count < $1.value.count }!.value.first!.rank
+        }
+    }
+}
+extension PokerHand: Comparable {
+    static func < (lhs: PokerHand, rhs: PokerHand) -> Bool {
+        switch (lhs.rank, rhs.rank) {
+        case (.twoPairs, .twoPairs):
+            return lhs.cards.map { $0.rank.rawValue }.reduce(0,+) < rhs.cards.map { $0.rank.rawValue }.reduce(0,+)
+        default:
+            return lhs.rank.rawValue == rhs.rank.rawValue ? lhs.highCard < rhs.highCard : lhs.rank.rawValue < rhs.rank.rawValue
+        }
+    }
+}
+extension PokerHand: LosslessStringConvertible {
+    var description: String {
+        return cards.map { $0.description }.joined(separator: " ")
+    }
+    init?(_ description: String) {
+        let handValues = description.split(separator: " ").compactMap { String($0) }
+        let dealtCards = handValues.compactMap { PlayingCard($0) }
+        guard dealtCards.count == 5 else { return nil }
+        cards = dealtCards
+        let cardsByRank = Dictionary(grouping: cards) { $0.rank }
+        let cardsBySuit = Dictionary(grouping: cards) { $0.suit }
+        let isFlush = cardsBySuit.max { a, b in a.value.count < b.value.count }!.value.count == 5
+        let ranks = dealtCards.sorted().map { $0.rank.rawValue }
+        let isStraightByAceLow = ranks.contains { $0 == 14} && ranks.reduce(0,+) == 28
+        let isStraight = isStraightByAceLow || ranks.map { $0 - 1 }.dropFirst() == ranks.dropLast()
+        let isQuad = cardsByRank.contains { $0.value.count == 4 }
+        let isTrip = cardsByRank.contains { $0.value.count == 3 }
+        let pairs = cardsByRank.filter { $0.value.count == 2 }
+        if isFlush, isStraight {
+            rank = .straightFlush
+        } else if isQuad {
+            rank = .fourOfAKind
+        } else if isTrip, pairs.count == 1 {
+            rank = .fullHouse
+        } else if isFlush {
+            rank = .flush
+        } else if isStraight {
+            rank = .straight
+        } else if isTrip {
+            rank = .threeOfAKind
+        } else if pairs.count == 2 {
+            rank = .twoPairs
+        } else if pairs.count == 1 {
+            rank = .onePair
+        } else {
+            self.rank = .highCard
+        }
+    }
+}
+struct PlayingCard {
+    enum Rank: Int, CaseIterable {
+        case two = 2, three, four, five, six, seven, eight, nine, ten, jack, queen, king, ace
+    }
+    enum Suit: Character {
+        case hearts = "♡"
+        case clubs = "♧"
+        case spades = "♤"
+        case diamonds = "♢"
+    }
+    let rank: PlayingCard.Rank
+    let suit: PlayingCard.Suit
+}
+extension PlayingCard: Comparable {
+    public static func <(lhs: PlayingCard, rhs: PlayingCard) -> Bool {
+        return lhs.rank == rhs.rank ? lhs.suit < rhs.suit : lhs.rank < rhs.rank
+    }
+    public static func >(lhs: PlayingCard, rhs: PlayingCard) -> Bool {
+        return lhs.rank == rhs.rank ? lhs.suit > rhs.suit : lhs.rank > rhs.rank
+    }
+}
+extension PlayingCard: LosslessStringConvertible {
+    var description: String {
+        return "\(rank)\(suit.rawValue)"
+    }
+    init?(_ description: String) {
+        var description = description
+        guard
+            let suitValue = description.popLast(),
+            let suit = Suit(rawValue: suitValue),
+            let rank = Rank(description)
+        else {
+            return nil
+        }
+        self.suit = suit
+        self.rank = rank
+    }
+}
+extension PlayingCard.Rank: LosslessStringConvertible {
+    public var description: String {
+            switch self {
+            case .ace: return "A"
+            case .jack: return "J"
+            case .queen: return "Q"
+            case .king: return "K"
+            default:
+                return "\(rawValue)"
+            }
+        }
+    init?(_ description: String) {
+        switch description {
+        case "A":
+            self = .ace
+        case "K":
+            self = .king
+        case "Q":
+            self = .queen
+        case "J":
+            self = .jack
+        default:
+            if let numeric = Int(description),
+               let rank = PlayingCard.Rank(rawValue: numeric) {
+                self = rank
+            } else {
+                return nil
+            }
+        }
+    }
+}
+extension PlayingCard.Rank: Comparable {
+    public static func <(lhs: PlayingCard.Rank, rhs: PlayingCard.Rank) -> Bool {
+        switch (lhs, rhs) {
+        case (_, _) where lhs == rhs:
+            return false
+        case (.ace, _):
+            return false
+        default:
+            return lhs.rawValue < rhs.rawValue
+        }
+    }
+}
+extension PlayingCard.Suit: Comparable {
+    public static func <(lhs: PlayingCard.Suit, rhs: PlayingCard.Suit) -> Bool {
+        switch (lhs, rhs) {
+        case (_, _) where lhs == rhs:
+            return false
+        case (.spades, _),
+        (.hearts, .diamonds), (.hearts, .clubs),
+        (.diamonds, .clubs):
+            return false
+        default:
+            return true
+        }
+    }
+}
